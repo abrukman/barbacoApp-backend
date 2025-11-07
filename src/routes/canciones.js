@@ -1,6 +1,7 @@
 import express from "express";
 import { cancionesEjemplo } from "../data/cancionesEjemplo.js";
 import { cancionParam } from "../middlewares/cancionParam.js";
+import { Cancion } from "../models/Cancion.js";
 
 const router = express.Router();
 
@@ -50,6 +51,21 @@ router.get("/:id/partituras/:pid", (req, res) => {
     res.status(500).json({ error: "Error del servidor"});
   }
   
- })
+ });
+
+ //ruta para probar POST en la base de datos
+ router.post("/", async (req, res) => {
+  if (!req.body.titulo || !req.body.autor) {
+    return res.status(400).json({ error: "Faltan datos obligatorios: título o autor" });
+  };
+  try {
+    const nuevaCancion = new Cancion(req.body);
+    await nuevaCancion.save();
+    res.status(201).json(nuevaCancion);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al guardar la canción" });
+  }
+ });
 
 export default router;
