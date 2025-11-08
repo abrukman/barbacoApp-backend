@@ -1,71 +1,105 @@
 import express from "express";
-import { cancionesEjemplo } from "../data/cancionesEjemplo.js";
+//import { cancionesEjemplo } from "../data/cancionesEjemplo.js";
 import { cancionParam } from "../middlewares/cancionParam.js";
 import { Cancion } from "../models/Cancion.js";
 
 const router = express.Router();
 
 //lista todas las canciones
-router.get("/", (req, res) => {
+router.get("/", async (req, res) => {
   try {
-    res.json(cancionesEjemplo);
+    const canciones = await Cancion.find();
+    res.json(canciones);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Error del servidor"});
   }
 });
 
-//acceder a una cancion particular
+
 //accedo a router.param
 router.param("id", cancionParam);
 
-router.get("/:id", (req, res) => {
-  try {
+//acceder a una cancion particular
+router.get("/:id", async (req, res) => {
     res.json(req.cancion);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Error del servidor"});
-  }
 });
 
 //acceder a las partituras de una cancion particular
 router.get("/:id/partituras", (req, res) => {
-  try {
     res.json(req.cancion.partituras);  
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Error del servidor"});
-  }
-  
-})
+});
 
 //acceder a una partitura especifica dentro de una cancion
 router.get("/:id/partituras/:pid", (req, res) => {
-  try {
-    const { pid } = req.params;
-    const partitura = req.cancion.partituras.find(p => p.id === pid);
+    const partitura = req.cancion.partituras.find(p => p.id === req.params.pid);
     if (!partitura) return res.status(404).json({ error: "Partitura no encontrada"});
-    res.json(partitura);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Error del servidor"});
-  }
-  
+    res.json(partitura);  
  });
 
- //ruta para probar POST en la base de datos
+ //POST
  router.post("/", async (req, res) => {
-  if (!req.body.titulo || !req.body.autor) {
-    return res.status(400).json({ error: "Faltan datos obligatorios: título o autor" });
-  };
+  const { titulo, autor, letra, portada, partituras } = req.body;
+
+  //validaciones
+  if (!titulo || !autor || !letra) {
+    return res
+      .status(400)
+      .json({ error: "Faltan datos obligatorios: título, autor o letra" });
+    };
+
+  if(!Array.isArray(partituras) || partituras.lenght === 0) {
+    return res
+      .status(400)
+      .json({ error: "Debe incluir al menos una partitura"});
+    };
+
   try {
     const nuevaCancion = new Cancion(req.body);
     await nuevaCancion.save();
     res.status(201).json(nuevaCancion);
-  } catch (error) {
+    } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Error al guardar la canción" });
-  }
+    };
  });
+
+ //PUT(editar)
+ router.put("/:id", async (req, res) => {
+  try {
+    const cancionActualizada = await Cancion.findOneAndUpdate(
+      { id: req.params.id },
+      req.body,
+      { new: true }
+    );
+    if(!cancionActualizada) {
+      return res
+        .status(404)
+        .json({ error: "Cancion no encontrada" })
+    };
+    res.json(cancionActualizada);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al actualizar la cancion" });
+  };
+ });
+
+ //DELETE
+ router.delete("/:id", async (req, res) => {
+  try {
+    const cancionEliminada = await Cancion.findOneAndDelete(
+      { id: req.params.id });
+    if(!cancionEliminada) {
+      return res
+        .status(404)
+        .json({ error: "Cancion no encontrada "});
+    };
+    res.json({ mensaje: "Cancion eliminada correctamente" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al eliminar la cancion "});
+  };
+ });
+
 
 export default router;
