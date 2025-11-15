@@ -2,6 +2,7 @@ import express from "express";
 //import { cancionesEjemplo } from "../data/cancionesEjemplo.js";
 import { cancionParam } from "../middlewares/cancionParam.js";
 import { Cancion } from "../models/Cancion.js";
+import slugify from "slugify";
 
 const router = express.Router();
 
@@ -59,26 +60,41 @@ router.get("/:id/partituras/:pid", (req, res) => {
     await nuevaCancion.save();
     res.status(201).json(nuevaCancion);
     } catch (error) {
+      if(error.name === "ValidationError") {
+      const mensajes = Object.values(error.errors).map(e => e.message);
+      return res.status(400).json({ error: mensajes });
+    }
     console.error(error);
     res.status(500).json({ error: "Error al guardar la canción" });
     };
  });
 
- //PUT(editar)
- router.put("/:id", async (req, res) => {
+ //PATCH(editar parcialmente, no se puede modificar titulo ni autor, solo letra, descripcion, portada y partituras)
+ router.patch("/:id", async (req, res) => {
   try {
-    const cancionActualizada = await Cancion.findOneAndUpdate(
-      { id: req.params.id },
-      req.body,
-      { new: true }
-    );
-    if(!cancionActualizada) {
+    const cancion = await Cancion.findOne(
+      { id: req.params.id });
+    if(!cancion) {
       return res
         .status(404)
         .json({ error: "Cancion no encontrada" })
     };
-    res.json(cancionActualizada);
+
+    const camposPermitidos = ["descripcion", "letra", "portada", "partituras"];
+    for (const campo of camposPermitidos) {
+      if(req.body[campo] !== undefined) {
+        cancion[campo] = req.body[campo];
+      };
+    };
+
+    await cancion.save();
+    res.json(cancion);
+    
   } catch (error) {
+    if(error.name === "ValidationError") {
+      const mensajes = Object.values(error.errors).map(e => e.message);
+      return res.status(400).json({ error: mensajes });
+    }
     console.error(error);
     res.status(500).json({ error: "Error al actualizar la cancion" });
   };

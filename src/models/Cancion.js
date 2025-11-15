@@ -21,7 +21,7 @@ const CancionSchema = new mongoose.Schema({
       validator: function (arr) {
         return arr.length > 0;
       },
-      message: "Debe haber al menos una partitura",
+      message: "Debe incluir al menos una partitura",
     },
   },
 });
