@@ -2,7 +2,8 @@ import express from "express";
 //import { cancionesEjemplo } from "../data/cancionesEjemplo.js";
 import { cancionParam } from "../middlewares/cancionParam.js";
 import { Cancion } from "../models/Cancion.js";
-import slugify from "slugify";
+import { guardarEnMemoria } from "../middlewares/guardarEnMemoria.js";
+import { borrarDeCloudinary, subirACloudinary } from "../middlewares/funcionesCloudinary.js";
 
 const router = express.Router();
 
@@ -39,8 +40,8 @@ router.get("/:id/partituras/:pid", (req, res) => {
  });
 
  //POST
- router.post("/", async (req, res) => {
-  const { titulo, autor, letra, portada, partituras } = req.body;
+ router.post("/", guardarEnMemoria.single('portada'), async (req, res) => {
+  const { titulo, autor, letra, partituras } = req.body;
 
   //validaciones
   if (!titulo || !autor || !letra) {
@@ -55,8 +56,11 @@ router.get("/:id/partituras/:pid", (req, res) => {
       .json({ error: "Debe incluir al menos una partitura"});
     };
 
+    const portada = req.file?.buffer ? await subirACloudinary(req.file.buffer) : null;
+    
+
   try {
-    const nuevaCancion = new Cancion(req.body);
+    const nuevaCancion = new Cancion({...req.body, portada: portada ? { url: portada.url, publicId: portada.publicId } : null });
     await nuevaCancion.save();
     res.status(201).json(nuevaCancion);
     } catch (error) {
@@ -70,7 +74,7 @@ router.get("/:id/partituras/:pid", (req, res) => {
  });
 
  //PATCH(editar parcialmente, no se puede modificar titulo ni autor, solo letra, descripcion, portada y partituras)
- router.patch("/:id", async (req, res) => {
+ router.patch("/:id", guardarEnMemoria.single('portada'), async (req, res) => {
   try {
     const cancion = await Cancion.findOne(
       { id: req.params.id });
@@ -80,10 +84,25 @@ router.get("/:id/partituras/:pid", (req, res) => {
         .json({ error: "Cancion no encontrada" })
     };
 
-    const camposPermitidos = ["descripcion", "letra", "portada", "partituras"];
+    const camposPermitidos = ["descripcion", "letra", "partituras"];
     for (const campo of camposPermitidos) {
       if(req.body[campo] !== undefined) {
         cancion[campo] = req.body[campo];
+      };
+    };
+
+    //si viene archivo de portada
+    if(req.file) {
+      //si ya habia portada se borra de cloudinary
+      if (cancion.portada && cancion.portada.publicId) {
+        await borrarDeCloudinary(cancion.portada.publicId);
+      }
+
+      const nuevaPortada = await subirACloudinary(req.file.buffer);
+
+      cancion.portada = {
+        url: nuevaPortada.url,
+        publicId: nuevaPortada.publicId
       };
     };
 
@@ -103,14 +122,26 @@ router.get("/:id/partituras/:pid", (req, res) => {
  //DELETE
  router.delete("/:id", async (req, res) => {
   try {
-    const cancionEliminada = await Cancion.findOneAndDelete(
+    
+    const cancionAEliminar = await Cancion.findOne(
       { id: req.params.id });
-    if(!cancionEliminada) {
+    if(!cancionAEliminar) {
       return res
         .status(404)
         .json({ error: "Cancion no encontrada "});
     };
-    res.json({ mensaje: "Cancion eliminada correctamente" });
+    
+    //si tiene portada, la borramos de cloudinary
+    if(cancionAEliminar.portada?.publicId) {
+      try {
+        await borrarDeCloudinary(cancionAEliminar.portada.publicId);
+      } catch (error) {
+        console.error(error);
+      };
+      //borramos la cancion de MongoDB
+      await cancionAEliminar.deleteOne({ id: req.params.id });
+      res.json('Cancion eliminada correctamente');
+    }
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Error al eliminar la cancion "});

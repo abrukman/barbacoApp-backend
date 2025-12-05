@@ -12,7 +12,10 @@ const CancionSchema = new mongoose.Schema({
   titulo: { type: String, required: [true, "El titulo es obligatorio"] },
   autor: { type: String, required: [true, "El autor es obligatorio"] },
   letra: { type: String, required: [true, "La letra es obligatoria"] },
-  portada: { type: String },
+  portada: {
+    url: { type: String },
+    publicId: { type: String },
+  },
   descripcion: { type: String },
   analisisIA: { type: String },
   partituras: {
