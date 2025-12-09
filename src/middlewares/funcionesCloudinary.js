@@ -1,4 +1,4 @@
-import { v2 as cloudinary } from "cloudinary";
+import cloudinary from "../config/cloudinary.js";
 
 export async function subirACloudinary(buffer) {
     return new Promise((resolve, reject) => {

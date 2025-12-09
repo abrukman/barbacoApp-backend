@@ -4,6 +4,7 @@ import { cancionParam } from "../middlewares/cancionParam.js";
 import { Cancion } from "../models/Cancion.js";
 import { guardarEnMemoria } from "../middlewares/guardarEnMemoria.js";
 import { borrarDeCloudinary, subirACloudinary } from "../middlewares/funcionesCloudinary.js";
+import slugify from "slugify";
 
 const router = express.Router();
 
@@ -42,6 +43,8 @@ router.get("/:id/partituras/:pid", (req, res) => {
  //POST
  router.post("/", guardarEnMemoria.single('portada'), async (req, res) => {
   const { titulo, autor, letra, partituras } = req.body;
+  req.body.partituras = JSON.parse(req.body.partituras);
+  
 
   //validaciones
   if (!titulo || !autor || !letra) {
@@ -49,27 +52,35 @@ router.get("/:id/partituras/:pid", (req, res) => {
       .status(400)
       .json({ error: "Faltan datos obligatorios: título, autor o letra" });
     };
+  
+  const tituloNormalizado = titulo.toLowerCase();
+  const id = slugify(tituloNormalizado, { lower: true});
+  const existe = await Cancion.findOne({ titulo });
+  
+  if(existe) {
+    return res.status(400).json({error: 'Ya existe una cancion con ese nombre'});
+  }
 
-  if(!Array.isArray(partituras) || partituras.lenght === 0) {
+  /* if(!Array.isArray(partituras) || partituras.lenght === 0) {
     return res
       .status(400)
       .json({ error: "Debe incluir al menos una partitura"});
-    };
+    }; */
 
-    const portada = req.file?.buffer ? await subirACloudinary(req.file.buffer) : null;
-    
 
   try {
+    const portada = req.file?.buffer ? await subirACloudinary(req.file.buffer) : null;
     const nuevaCancion = new Cancion({...req.body, portada: portada ? { url: portada.url, publicId: portada.publicId } : null });
     await nuevaCancion.save();
     res.status(201).json(nuevaCancion);
+
     } catch (error) {
       if(error.name === "ValidationError") {
       const mensajes = Object.values(error.errors).map(e => e.message);
       return res.status(400).json({ error: mensajes });
     }
     console.error(error);
-    res.status(500).json({ error: "Error al guardar la canción" });
+    res.status(500).json(error.message);
     };
  });
 
@@ -132,7 +143,7 @@ router.get("/:id/partituras/:pid", (req, res) => {
     };
     
     //si tiene portada, la borramos de cloudinary
-    if(cancionAEliminar.portada?.publicId) {
+    if(cancionAEliminar.portada && cancionAEliminar.portada.publicId) {
       try {
         await borrarDeCloudinary(cancionAEliminar.portada.publicId);
       } catch (error) {
