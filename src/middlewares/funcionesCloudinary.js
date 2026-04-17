@@ -1,12 +1,13 @@
 import cloudinary from "../config/cloudinary.js";
 
-export async function subirACloudinary(buffer) {
+export async function subirACloudinary(buffer, {
+    folder = 'otros',
+    resource_type = 'auto',
+    public_id = undefined
+} = {}) {
     return new Promise((resolve, reject) => {
         cloudinary.uploader.upload_stream(
-            {
-                folder: 'portadas',
-                resource_type: 'image'
-            },
+            { folder, resource_type, public_id },
             (error, result) => {
                 if (error) return reject(error);
                 resolve({
@@ -18,12 +19,8 @@ export async function subirACloudinary(buffer) {
     });
 };
 
-export async function borrarDeCloudinary(publicId) {
-    try {
-        const result = await cloudinary.uploader.destroy(publicId);
-        return result;
-    } catch (error) {
-        console.error('Error: ', error);
-        throw error;
-    };
+export async function borrarDeCloudinary(publicId, resourceType = 'image') {
+    if (!publicId) return;
+
+    return cloudinary.uploader.destroy(publicId, { resource_type: resourceType });
 };
