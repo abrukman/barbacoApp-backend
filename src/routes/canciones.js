@@ -70,7 +70,7 @@ router.post(
   "/",
   guardarEnMemoria.fields([
     { name: "portada", maxCount: 1 },
-    { name: "partituras", maxCount: 20 },
+    { name: "archivosPartituras", maxCount: 20 },
   ]),
   async (req, res) => {
     //variables para rollback
@@ -82,7 +82,7 @@ router.post(
       const partiturasMetadata = JSON.parse(
         req.body.partiturasMetadata || "[]",
       );
-      const archivosPartituras = req.files?.partituras || [];
+      const archivosPartituras = req.files?.archivosPartituras || [];
 
       const totalEsperado = partiturasMetadata.reduce(
         (acc, p) => acc + p.cantidadArchivos,
@@ -126,6 +126,11 @@ router.post(
         const portada = await subirPortada(cancion, req.files.portada[0]);
         cancion.portada = portada;
         upload.push(portada.publicId);
+      } else {
+        cancion.portada = {
+          url: `https://placehold.co/1080x1080/1e1e1e/ffffff?text=${encodeURIComponent(cancion.titulo)}`,
+          publicId: null,
+        };
       }
 
       let cursor = 0;
@@ -190,9 +195,11 @@ router.patch(
   "/:id",
   guardarEnMemoria.fields([
     { name: "portada", maxCount: 1 },
-    { name: "partituras", maxCount: 20 },
+    { name: "archivosPartituras", maxCount: 20 },
   ]),
   async (req, res) => {
+    console.log("body: ", req.body);
+    console.log("files: ", req.files);
     const cancion = req.cancion;
     const partiturasExistentes = await Partitura.find({
       _id: { $in: cancion.partituras },
@@ -200,7 +207,8 @@ router.patch(
     const nuevaMetadata = req.body.partiturasMetadata
       ? JSON.parse(req.body.partiturasMetadata)
       : [];
-    const archivosPartituras = req.files?.partituras || [];
+    console.log("metadata parseada: ", nuevaMetadata);
+    const archivosPartituras = req.files?.archivosPartituras || [];
     let archivoIndex = 0;
 
     //para rollback y limpieza de cloudinary
@@ -212,6 +220,12 @@ router.patch(
     const partiturasParaActualizar = [];
 
     try {
+      console.log(
+        "validando: ",
+        cancion.partituras,
+        nuevaMetadata,
+        archivosPartituras,
+      );
       //validaciones
       validarAccionesPartituras({
         partiturasExistentes,
@@ -224,16 +238,7 @@ router.patch(
 
       //------actualizar portada
       if (req.files?.portada?.[0]) {
-        const portadaAnterior = cancion.portada?.publicId;
-
         const portadaNueva = await subirPortada(cancion, req.files.portada[0]);
-
-        if (portadaAnterior) {
-          archivosParaBorrar.push({
-            publicId: portadaAnterior,
-            resource_type: "image",
-          });
-        }
 
         archivosNuevos.push(portadaNueva.publicId);
         cancion.portada = portadaNueva;
@@ -449,17 +454,17 @@ router.delete("/:id", async (req, res) => {
 
     console.log("Archivos eliminados: ", archivosParaBorrar.length);
     await Promise.all(
-      archivosParaBorrar
-        .map((archivo) =>
-          borrarDeCloudinary(archivo.publicId, archivo.resource_type),
-        )
-        .catch((error) => {
-          console.error(
-            "Error al borrar de Cloudinary: ",
-            archivo.publicId,
-            error,
-          );
-        }),
+      archivosParaBorrar.map((archivo) =>
+        borrarDeCloudinary(archivo.publicId, archivo.resource_type).catch(
+          (error) => {
+            console.error(
+              "Error al borrar de Cloudinary: ",
+              archivo.publicId,
+              error,
+            );
+          },
+        ),
+      ),
     );
   } catch (error) {
     const status = error.status || 500;
